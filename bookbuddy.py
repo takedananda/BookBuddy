@@ -82,6 +82,7 @@ def extract_from_pdf(pdf_bytes):
 # Streamlit app
 st.title('Book Analysis App')
 
+
 # File uploader for images
 uploaded_file = st.file_uploader('Upload an image or PDF of a book page', type=['jpg', 'jpeg', 'png', 'pdf'])
 
@@ -220,36 +221,38 @@ Now that I gave you some examples, I will start giving you prompts for you to cl
         ]
     )
     
-    if response.choices[0].message.content == "Quiz":
-        # chat completion for quiz. 
-        st.text_area('Extracted Text', "This is a quiz response", height=200)
-        
-        # Come up with prompt that returns specific format
-        quiz_generation_prompt = """I am reading a book and would like you to generate quiz questions based on a page of text I provide. Please follow these instructions:
-
-        1. Read the text data that I will feed you.
-        2. Generate four quiz questions based on the content of the text.
-        3. Each question should be open-ended (not multiple-choice).
-        4. Provide a clear separator between the questions and the answers. Use 'ANSWERS' as the separator.
-        5. Format your response as follows:
-        Q1: [Your first quiz question]
-        Q2: [Your second quiz question]
-        Q3: [Your third quiz question]
-        Q4: [Your fourth quiz question]
-        
-        ANSWERS
-        
-        A1: [Answer to the first question]
-        A2: [Answer to the second question]
-        A3: [Answer to the third question]
-        A4: [Answer to the fourth question]
-        
-        6. Be ready to be able to grade the answers that the user provides back.
-        
-        
-        Remember, your response should strictly only be in the format provided on instruction #5.
-        """
-        with st.chat_message("assistant"):
+    with st.chat_message("assistant"):
+    
+    
+        if response.choices[0].message.content == "Quiz":
+            # chat completion for quiz. 
+            st.text_area('Extracted Text', "This is a quiz response", height=200)
+            
+            # Come up with prompt that returns specific format
+            quiz_generation_prompt = """I am reading a book and would like you to generate quiz questions based on a page of text I provide. Please follow these instructions:
+    
+            1. Read the text data that I will feed you.
+            2. Generate four quiz questions based on the content of the text.
+            3. Each question should be open-ended (not multiple-choice).
+            4. Provide a clear separator between the questions and the answers. Use 'ANSWERS' as the separator.
+            5. Format your response as follows:
+            Q1: [Your first quiz question]
+            Q2: [Your second quiz question]
+            Q3: [Your third quiz question]
+            Q4: [Your fourth quiz question]
+            
+            ANSWERS
+            
+            A1: [Answer to the first question]
+            A2: [Answer to the second question]
+            A3: [Answer to the third question]
+            A4: [Answer to the fourth question]
+            
+            6. Be ready to be able to grade the answers that the user provides back.
+            
+            
+            Remember, your response should strictly only be in the format provided on instruction #5.
+            """
             stream = client.chat.completions.create(
                 model=st.session_state["openai_model"],
                 messages=[
@@ -259,27 +262,24 @@ Now that I gave you some examples, I will start giving you prompts for you to cl
             )
             
             response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response}) # Append the chat info to dictionary
+            st.session_state.messages.append({"role": "assistant", "content": response}) # Append the chat info to dictionary
 
             
         
-    else:
-        # What I have now
-        st.text_area('Extracted Text', "This is a pass response", height=200)
-
-        
+        else:
+            # What I have now
+            st.text_area('Extracted Text', "This is a pass response", height=200)
     
-    with st.chat_message("assistant"): # Write chat gpt response as assistant role
-        stream = client.chat.completions.create(
-            model=st.session_state["openai_model"],
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-        response = st.write_stream(stream)
-    st.session_state.messages.append({"role": "assistant", "content": response}) # Append the chat info to dictionary
-
-
-
+            stream = client.chat.completions.create(
+                model=st.session_state["openai_model"],
+                messages=[
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.messages
+                ],
+                stream=True,
+            )
+            response = st.write_stream(stream)
+            st.session_state.messages.append({"role": "assistant", "content": response}) # Append the chat info to dictionary
+    
+    
+    
