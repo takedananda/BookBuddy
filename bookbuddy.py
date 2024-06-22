@@ -6,6 +6,8 @@ from PIL import Image
 import os
 import fitz  # PyMuPDF
 from openai import OpenAI
+from streamlit_free_text_select import st_free_text_select
+import sys
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\taked\OneDrive\Documents\GCP_API.json"
@@ -82,9 +84,43 @@ def extract_from_pdf(pdf_bytes):
 # Streamlit app
 st.title('Book Analysis App')
 
+with st.sidebar:
+    # Free text selecter to store book name, chapter, and page
+    options = ["apple"]
+    
+    book_title = st_free_text_select(
+        label="Book Title",
+        options=options,
+        format_func=lambda x: x.lower(),
+        placeholder="Select or enter the book title",
+        disabled=False,
+        delay=300,
+    )
+    # st.write("Book title:", book_title)
+    
+    
+    # Gain chapter and page data
+    ch_options = ["apple"]
+    
+    chapter = st_free_text_select(
+        label="Chapter",
+        options=ch_options,
+        format_func=lambda x: x.lower(),
+        disabled=False,
+        delay=300,
+    )
+    st.write("Book title:",chapter)
+    
+    page = st.number_input("Insert page number", step = 1)
 
+
+# Enforcing book info to be filled to proceed with the rest of the app usage
+if book_title is None or chapter is None or page == 0:
+    sys.exit()
+    
 # File uploader for images
 uploaded_file = st.file_uploader('Upload an image or PDF of a book page', type=['jpg', 'jpeg', 'png', 'pdf'])
+
 
 if uploaded_file is not None:
     # Initialize the Google Cloud Vision client
@@ -135,7 +171,9 @@ if uploaded_file is not None:
 # book_id = SELECT id FROM dbo.book where title = book_title
 
 
-
+# Enforcing file to be uploaded in order to proceed to summarization
+if uploaded_file is None:
+    sys.exit() 
 
 # Send extracted text to OpenAI API
 
@@ -156,7 +194,7 @@ for message in st.session_state.messages: # Write each message in messages along
 
 
 # Get chatGPT to generate summary
-if st.button("Summarize"):
+if st.button("Summarize") and uploaded_file is not None:
 
     with st.chat_message("assistant"):
 
