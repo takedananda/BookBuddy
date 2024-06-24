@@ -8,9 +8,24 @@ import fitz  # PyMuPDF
 from openai import OpenAI
 from streamlit_free_text_select import st_free_text_select
 import sys
-
+import psycopg2
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\taked\OneDrive\Documents\GCP_API.json"
+
+# Connect to Postgres
+conn = psycopg2.connect(
+    dbname="DEV_BookBuddy_DB",
+    user="postgres",
+    password="Zedd414!",
+    host="localhost",
+    port="5432"
+)
+
+#Creating cursor object
+
+cursor = conn.cursor()
+
+
 
 
 # Initialize the Google Cloud Vision client
@@ -79,10 +94,19 @@ def extract_from_pdf(pdf_bytes):
     
     except Exception as e:
         raise Exception(f"Error parsing PDF: {e}")
-
+        
+        
 
 # Streamlit app
 st.title('Book Analysis App')
+
+# Initialize session state for uploaded file and button
+if 'uploaded_file' not in st.session_state:
+    st.session_state.uploaded_file = False
+    
+if 'button_pressed' not in st.session_state:
+    st.session_state.button_pressed = False
+
 
 with st.sidebar:
     # Free text selecter to store book name, chapter, and page
@@ -158,9 +182,16 @@ if uploaded_file is not None:
                 extracted_text = ocr_image(client, image)
             st.text_area('Extracted Text', extracted_text, height=200)
             
+    # Check if uploaded file is a new file
+    if st.session_state.uploaded_file is None or uploaded_file != st.session_state.uploaded_file:
+        st.session_state.uploaded_file = uploaded_file
+        st.session_state.button_pressed = False
+            
 # Will be working on cases where book pages are loaded into the app one page at a time
 
-# Store book title and chapter
+# Store book title and 
+# cursor.execute("Insert into dbo.book (title)")
+
 # book_title = xyz
 # chapter = xyz
 
@@ -194,28 +225,32 @@ for message in st.session_state.messages: # Write each message in messages along
 
 
 # Get chatGPT to generate summary
-if st.button("Summarize") and uploaded_file is not None:
-
-    with st.chat_message("assistant"):
-
-    # Create a chat completion
-        stream = client.chat.completions.create(
-            model=st.session_state["openai_model"],  # or another model name like "gpt-3.5-turbo"
-            messages=[
-                {"role": "system", "content": "You are a knowledgeable reading partner. You will be given excerpts from books your partner is reading, and you will give summaries, and be ready to provide difficult vocabularies lists, comprehension quizzes, or provide historical context behind the book when asked."},
-                {"role": "user", "content": "Please summarize the following excerpt from a book I am reading:" + extracted_text}
-            ],
-            stream=True,
-        )
-        response = st.write_stream(stream)
-    st.session_state.messages.append({"role": "assistant", "content": response}) # Append the chat info to dictionary
-
-    # Store extracted text and summary into database
-    # INsert into Summary (id = book_id, chapter = chapter, page = page, summary = stream.choices[0].message.content,
-    #   orig_text = extracted_text, summary_level = 'Page' )
+if not st.session_state.button_pressed or st.session_state.button_pressed == False:
+    if st.button("Summarize") and uploaded_file is not None:
     
-    # Print the response
-#    st.text_area('Summary', response.choices[0].message.content, height=200)
+        with st.chat_message("assistant"):
+    
+        # Create a chat completion
+            stream = client.chat.completions.create(
+                model=st.session_state["openai_model"],  # or another model name like "gpt-3.5-turbo"
+                messages=[
+                    {"role": "system", "content": "You are a knowledgeable reading partner. You will be given excerpts from books your partner is reading, and you will give summaries, and be ready to provide difficult vocabularies lists, comprehension quizzes, or provide historical context behind the book when asked."},
+                    {"role": "user", "content": "Please summarize the following excerpt from a book I am reading:" + extracted_text}
+                ],
+                stream=True,
+            )
+            response = st.write_stream(stream)
+        st.session_state.messages.append({"role": "assistant", "content": response}) # Append the chat info to dictionary
+        
+        # Flip the button switch to true to hide button
+        st.session_state.button_pressed = True
+    
+        # Store extracted text and summary into database
+        # INsert into Summary (id = book_id, chapter = chapter, page = page, summary = stream.choices[0].message.content,
+        #   orig_text = extracted_text, summary_level = 'Page' )
+        
+        # Print the response
+    #    st.text_area('Summary', response.choices[0].message.content, height=200)
 
 if prompt := st.chat_input("What is up?"): # If chat input is obtained
     st.session_state.messages.append({"role": "user", "content": prompt}) # Add content and user role as a dictionary in message
