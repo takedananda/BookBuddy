@@ -9,6 +9,8 @@ from openai import OpenAI
 from streamlit_free_text_select import st_free_text_select
 import sys
 import psycopg2
+import re
+import time
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\taked\OneDrive\Documents\GCP_API.json"
 
@@ -245,9 +247,42 @@ if not st.session_state.button_pressed or st.session_state.button_pressed == Fal
         # Flip the button switch to true to hide button
         st.session_state.button_pressed = True
     
-        # Store extracted text and summary into database
+        # Store extracted text, summary, and book info into database
+        
+        # This should only occur when the book does not exist. Have to do that if else statement
+        
+        cursor.execute("SELECT title FROM dbo.book;")
+        book_query_result = cursor.fetchall()
+
+        # Output is a list of tuple, where each tuple is a row from db. Need to unpack this to a list of stirngs.
+        book_query_result_list = [t[0] for t in book_query_result]
+        
+        # V2: can clean book title prior to inserting into db to standardize titles. Can also add author data to distinguish books with the same title
+        
+        # Inserting data in the book table only if this is a new book
+        if book_title not in book_query_result_list:
+            cursor.execute("INSERT INTO dbo.book (title) VALUES (%s)",
+                           (book_title,)
+            )
+            
+        # Find ID of book
+        cursor.execute("SELECT id FROM dbo.book WHERE title = %s;",
+                       (book_title,))
+        
+        # Fetch result
+        book_id_query_result = cursor.fetchone()
+        
+        book_id = book_id_query_result[0]
+        
+        # Store summary and extracted text data into db
+        
+        cursor.execute("INSERT INTO dbo.summary (book_id, chapter, page, summary, orig_text, summary_level) VALUES (%s,%s,%s,%s,%s,%s);",
+                       (book_id, chapter, page, response, extracted_text, "Page" ))
         # INsert into Summary (id = book_id, chapter = chapter, page = page, summary = stream.choices[0].message.content,
         #   orig_text = extracted_text, summary_level = 'Page' )
+        
+        # Commit the insert statements
+        conn.commit()
         
         # Print the response
     #    st.text_area('Summary', response.choices[0].message.content, height=200)
@@ -326,18 +361,67 @@ Now that I gave you some examples, I will start giving you prompts for you to cl
             
             Remember, your response should strictly only be in the format provided on instruction #5.
             """
+            
+            # Call OpenAI API to generate quiz
             stream = client.chat.completions.create(
                 model=st.session_state["openai_model"],
                 messages=[
                         {"role": "system", "content": quiz_generation_prompt},
                         {"role": "user", "content": "With the output in the specified format from the instructions, please generate quizzes based on this text:" + extracted_text}
-                ], stream = True
+                ]
             )
             
-            response = st.write_stream(stream)
-            st.session_state.messages.append({"role": "assistant", "content": response}) # Append the chat info to dictionary
+            # Store ChatGPT output as string and append response in message session state
+            response = stream.choices[0].message.content
+            st.session_state.messages.append({"role": "assistant", "content": response}) 
 
             
+            # Parse through ChatGPT's response to store quiz data and to expose questions to user
+            questions = response.split(sep="ANSWERS")[0]
+            
+            # Use regex to separate out the questions themselves from question markers (ex: Q1, Q2)
+            pattern = r"Q\d:\s"
+            result = re.split(pattern, questions)
+            
+            # Store just the questions into a list
+            cleaned_questions = [word.replace('\n','') for word in result if word]
+
+            # Create a string of formatted questions to expose to user 
+            output_string = ''
+            for i in range(0, len(cleaned_questions)):
+                q = "Q"+str(i+1)+": "
+                output_string = output_string + q + cleaned_questions[i] + '\n\n'
+           
+            # Stream output string to user
+            def stream_data():
+                for word in output_string.split(" "):
+                    yield word + " "
+                    time.sleep(0.02)
+          
+            question_response = st.write_stream(stream_data)
+            
+            # Parse through ChatGPT's response to store answer data
+            answers = response.split(sep="ANSWERS")[1]
+            
+            # Use regex to separate out the questions themselves from question markers (ex: Q1, Q2)
+            pattern = r"A\d:\s"
+            result = re.split(pattern, answers)
+            
+            # Store just the questions into a list
+            cleaned_answers = [word.replace('\n','') for word in result if word and word.replace('\n','') !='']
+            
+            
+            # Insert quizzes into database
+            
+            user_response = None
+            is_correct = None
+            
+            for i in range(0,len(cleaned_questions)):
+                cursor.execute("INSERT INTO dbo.quiz (book_id, chapter, page, question, response, is_correct, correct_answer) VALUES (%s,%s,%s,%s,%s,%s,%s);",
+                               ("1", chapter, page, cleaned_questions[i], user_response, is_correct,  cleaned_answers[i]))
+
+            # Commit the insert statements
+            conn.commit()
         
         else:
             # What I have now
